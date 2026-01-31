@@ -11,25 +11,29 @@ const API_KEY = process.env.API_KEY || "";
 export const processMedia = async (mediaBase64: string, mimeType: string, retries = 2): Promise<{ transcript: TranscriptSegment[]; fullText: string; subject: string }> => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   
+  const isAudio = mimeType.startsWith('audio/');
   const prompt = `
-    You are an expert transcriber and analyst. Transcribe the provided media content (audio or video) and summarize the main subject.
+    You are an expert transcriber and analyst. Transcribe the provided media content (${isAudio ? 'Audio Session / Phone Call' : 'Video Recording'}) and summarize the main subject.
     The content may contain speech in English, Hindi, or Marathi, or a mix.
+    
+    Context: If this is an audio-only file, it is likely a phone call or a voice meeting. 
+    Pay close attention to caller and receiver roles. Filter out background noise or static common in phone lines.
     
     Rules:
     1. Identify the language for each segment.
     2. Provide timestamps in format [MM:SS].
-    3. If multiple speakers are present, label them distinctly (e.g., Speaker 1, Speaker 2).
+    3. If multiple speakers are present, label them distinctly (e.g., Caller, Recipient, or Speaker 1, Speaker 2).
     4. Provide a concise "subject" line (max 10 words) describing the main topic.
     5. Transcribe ALL spoken words accurately into text.
     6. MANDATORY: For any segments in Hindi or Marathi, provide an accurate English translation in the "translatedText" field.
     
     Strictly use JSON output format with the following schema:
     {
-      "subject": "Concise summary of the meeting",
+      "subject": "Concise summary of the meeting or call",
       "segments": [
         { 
           "timestamp": "00:05", 
-          "speaker": "Speaker 1", 
+          "speaker": "Caller", 
           "text": "The original spoken text...", 
           "translatedText": "English translation if text was Hindi/Marathi, else leave blank",
           "language": "English/Hindi/Marathi" 
