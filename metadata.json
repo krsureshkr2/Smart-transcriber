@@ -1,0 +1,8 @@
+{
+  "name": "VideoScribe Assistant",
+  "description": "An AI-powered video transcription and analysis tool that handles multi-language content (English, Hindi, Marathi) with an interactive Q&A assistant and a knowledge base.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
