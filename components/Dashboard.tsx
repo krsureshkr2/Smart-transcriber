@@ -48,7 +48,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Cloud Sync State
   const [showCloudModal, setShowCloudModal] = useState(false);
   const [cloudCreds, setCloudCreds] = useState<CloudCredentials>({ service: null, username: '' });
-  const [syncTarget, setSyncTarget] = useState<'transcript' | 'minutes' | null>(null);
+  const [syncTarget, setSyncTarget] = useState<'transcript' | 'minutes' | 'media' | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -157,7 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const startCloudSyncProcess = (type: 'transcript' | 'minutes') => {
+  const startCloudSyncProcess = (type: 'transcript' | 'minutes' | 'media') => {
     setSyncTarget(type);
     setCloudCreds({ service: null, username: '' });
     setShowCloudModal(true);
@@ -171,7 +171,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setSyncStatus('syncing');
     setSyncProgress(0);
 
-    // Simulated cloud storage upload
+    // Simulated cloud storage upload - handle "large files" by showing a slower progress for media
+    const isMedia = syncTarget === 'media';
+    const step = isMedia ? 2 : 5;
+    const intervalTime = isMedia ? 300 : 150;
+
     const interval = setInterval(() => {
       setSyncProgress(prev => {
         if (prev >= 100) {
@@ -183,9 +187,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setTimeout(() => setSyncStatus('idle'), 4000);
           return 100;
         }
-        return prev + 5;
+        return prev + step;
       });
-    }, 150);
+    }, intervalTime);
   };
 
   const exportFullTranscriptToWord = () => {
@@ -343,7 +347,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex justify-between items-center mb-6">
                 <div className="flex flex-col">
                   <h3 className="text-xl font-bold text-white">Cloud Authentication</h3>
-                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Storage Provisioning Required</p>
+                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                    Storage Provisioning Required for {syncTarget === 'media' ? 'Large Media Files' : 'Documents'}
+                  </p>
                 </div>
                 <button onClick={() => setShowCloudModal(false)} className="text-gray-500 hover:text-white transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -352,7 +358,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {!cloudCreds.service ? (
                 <div className="space-y-4">
-                  <p className="text-xs text-gray-400 text-center mb-4">Choose a cloud storage service to activate for this upload.</p>
+                  <p className="text-xs text-gray-400 text-center mb-4">Choose a cloud storage service to activate. Recommended for large video/audio files.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <button 
                       onClick={() => setCloudCreds({ ...cloudCreds, service: 'google' })}
@@ -383,7 +389,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </button>
                   </div>
                   
-                  <div className="bg-gray-950 p-4 border border-gray-800 rounded-xl mb-4">
+                  <div className="bg-gray-950 p-4 border border-gray-800 rounded-xl mb-4 shadow-inner">
                     <div className="flex items-center gap-3 mb-4">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cloudCreds.service === 'google' ? 'bg-white' : 'bg-blue-600'}`}>
                         {cloudCreds.service === 'google' ? (
@@ -392,27 +398,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="currentColor"><path d="M11 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5zm6-5c0-1.38-1.12-2.5-2.5-2.5S12 5.12 12 6.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5z"/></svg>
                         )}
                       </div>
-                      <span className="text-sm font-bold text-white uppercase tracking-wider">{cloudCreds.service === 'google' ? 'Google Drive' : 'Microsoft OneDrive'}</span>
+                      <span className="text-sm font-bold text-white uppercase tracking-wider">{cloudCreds.service === 'google' ? 'Google Account' : 'Microsoft Account'}</span>
                     </div>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[9px] font-bold text-gray-600 uppercase mb-1">Login ID / Email</label>
+                        <label className="block text-[9px] font-bold text-gray-600 uppercase mb-1">User ID / Email</label>
                         <input 
                           type="text" 
                           autoFocus
                           value={cloudCreds.username}
                           onChange={(e) => setCloudCreds({ ...cloudCreds, username: e.target.value })}
-                          placeholder="your@account.com"
+                          placeholder="e.g. user@cloud.com"
                           className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold text-gray-600 uppercase mb-1">Cloud Password</label>
+                        <label className="block text-[9px] font-bold text-gray-600 uppercase mb-1">Manual Access Password</label>
                         <input 
                           type="password" 
                           value={cloudCreds.password || ''}
                           onChange={(e) => setCloudCreds({ ...cloudCreds, password: e.target.value })}
+                          placeholder="••••••••"
                           className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
@@ -425,9 +432,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                    Activate & Upload
+                    Connect & Start Sync
                   </button>
-                  <p className="text-[8px] text-gray-600 text-center uppercase tracking-[0.2em] mt-4 italic">Security Note: Credentials are required for each manual sync session.</p>
+                  <p className="text-[8px] text-gray-600 text-center uppercase tracking-[0.2em] mt-4 italic">Note: Large files may take several minutes to provision.</p>
                 </div>
               )}
             </div>
@@ -500,22 +507,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-700 bg-gray-950">No Media Active</div>
             )}
+            
+            {/* Direct Cloud Sync for Large Media */}
+            {mediaUrl && (
+               <button 
+                 onClick={() => startCloudSyncProcess('media')}
+                 className="absolute bottom-14 right-4 bg-blue-600/90 hover:bg-blue-600 text-white p-2 rounded-full shadow-lg backdrop-blur-sm transition-all flex items-center gap-2 group/media"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                 <span className="text-[9px] font-bold uppercase overflow-hidden w-0 group-hover/media:w-24 transition-all whitespace-nowrap">Store in Cloud</span>
+               </button>
+            )}
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col shadow-lg h-1/3">
              <div className="px-4 py-2 bg-gray-950 border-b border-gray-800 flex justify-between items-center">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Meeting Attendees</h4>
              </div>
-             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar text-xs">
                 {attendees.map((a, idx) => (
-                  <div key={idx} className="p-2 bg-gray-950 rounded text-xs flex justify-between border border-gray-800">
-                    <span className="font-bold text-gray-200">{a.name} <span className="font-normal text-gray-500">({a.company})</span></span>
-                    <button onClick={() => handleRemoveAttendee(idx)} className="text-red-500 hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                  <div key={idx} className="p-2 bg-gray-950 rounded text-xs flex justify-between border border-gray-800 items-center">
+                    <span className="font-bold text-gray-200 truncate">{a.name} <span className="font-normal text-gray-500 block text-[10px]">{a.company}</span></span>
+                    <button onClick={() => handleRemoveAttendee(idx)} className="text-gray-600 hover:text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
                 ))}
-                <div className="flex gap-2 pt-2">
-                  <input type="text" value={newAttendee.name} onChange={(e) => setNewAttendee({...newAttendee, name: e.target.value})} placeholder="Name" className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-[10px] text-white outline-none w-1/2" />
-                  <input type="text" value={newAttendee.company} onChange={(e) => setNewAttendee({...newAttendee, company: e.target.value})} placeholder="Company" className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-[10px] text-white outline-none w-1/2" />
-                  <button onClick={handleAddAttendee} className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold">Add</button>
+                <div className="flex flex-col gap-2 pt-2">
+                  <input type="text" value={newAttendee.name} onChange={(e) => setNewAttendee({...newAttendee, name: e.target.value})} placeholder="Full Name" className="bg-gray-950 border border-gray-800 rounded px-2 py-1.5 text-[10px] text-white outline-none w-full" />
+                  <div className="flex gap-2">
+                    <input type="text" value={newAttendee.company} onChange={(e) => setNewAttendee({...newAttendee, company: e.target.value})} placeholder="Company" className="bg-gray-950 border border-gray-800 rounded px-2 py-1.5 text-[10px] text-white outline-none flex-1" />
+                    <button onClick={handleAddAttendee} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase">Add</button>
+                  </div>
                 </div>
              </div>
           </div>
@@ -523,10 +543,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
           <div className="flex flex-col bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg relative">
-            {isSyncing && (
+            {isSyncing && syncTarget !== 'minutes' && (
               <div className="absolute top-0 left-0 right-0 z-50 bg-blue-600/20 backdrop-blur-sm p-4 animate-in slide-in-from-top-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Provisioning Cloud Storage...</span>
+                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                    {syncTarget === 'media' ? 'Provisioning Large Media Transfer...' : 'Uploading Meeting Transcript...'}
+                  </span>
                   <span className="text-[10px] font-bold text-white">{syncProgress}%</span>
                 </div>
                 <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden">
@@ -538,7 +560,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <h3 className="text-xs font-bold uppercase tracking-widest text-gray-300">Transcript</h3>
               {transcript.length > 0 && (
                 <div className="flex gap-2">
-                  <button onClick={() => startCloudSyncProcess('transcript')} className="p-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded border border-gray-700 transition-all" title="Sync to Cloud">
+                  <button onClick={() => startCloudSyncProcess('transcript')} className="p-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded border border-gray-700 transition-all" title="Sync Transcript to Cloud">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                   </button>
                   <button onClick={exportFullTranscriptToWord} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded transition-all font-bold border border-blue-500/20">
@@ -549,20 +571,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               {transcript.map((seg) => (
-                <div key={seg.id} className="bg-gray-950/30 p-3 rounded-lg border border-gray-800/50">
+                <div key={seg.id} className="bg-gray-950/30 p-3 rounded-lg border border-gray-800/50 hover:border-blue-500/30 transition-all">
                   <div className="flex justify-between mb-1">
                     <span className="text-[9px] font-mono text-blue-400">{seg.timestamp}</span>
-                    <button onClick={() => saveTranscriptSegment(seg)} className="text-gray-500 hover:text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg></button>
+                    <button onClick={() => saveTranscriptSegment(seg)} className="text-gray-500 hover:text-green-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg></button>
                   </div>
-                  <button onClick={() => setEditingSpeakerId(seg.id)} className="text-[10px] font-bold text-gray-500 uppercase hover:text-blue-400">{seg.speaker || "Unknown Speaker"}</button>
-                  <p className="text-sm text-gray-300">{seg.text}</p>
+                  <button onClick={() => setEditingSpeakerId(seg.id)} className="text-[10px] font-bold text-gray-500 uppercase hover:text-blue-400 text-left mb-1">{seg.speaker || "Unknown Speaker"}</button>
+                  <p className="text-sm text-gray-300 leading-relaxed">{seg.text}</p>
                   {seg.translatedText && <p className="text-xs italic text-gray-500 mt-1"><span className="font-bold text-blue-500/50 mr-1">EN:</span>{seg.translatedText}</p>}
                 </div>
               ))}
+              {transcript.length === 0 && (
+                <div className="h-full flex flex-col items-center justify-center text-gray-600 text-xs italic">
+                  {isProcessing ? "Analyzing audio chunks..." : "No transcript available."}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-col bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg">
+          <div className="flex flex-col bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg relative">
+            {isSyncing && syncTarget === 'minutes' && (
+              <div className="absolute top-0 left-0 right-0 z-50 bg-blue-600/20 backdrop-blur-sm p-4 animate-in slide-in-from-top-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Uploading Minutes & Report...</span>
+                  <span className="text-[10px] font-bold text-white">{syncProgress}%</span>
+                </div>
+                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden">
+                  <div className="bg-blue-500 h-full transition-all duration-150" style={{ width: `${syncProgress}%` }}></div>
+                </div>
+              </div>
+            )}
             <div className="px-4 py-3 bg-gray-900/80 border-b border-gray-800 flex items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-gray-300">Clarification Box</h3>
               {chatHistory.length > 0 && (
@@ -570,24 +608,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <button onClick={() => startCloudSyncProcess('minutes')} className="p-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded border border-gray-700 transition-all" title="Sync Minutes to Cloud">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
                   </button>
-                  <button onClick={() => exportChatToWord(chatHistory.filter(m => m.role === 'model').map(m => m.content).join('\n\n'))} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded font-bold border border-blue-500/20">Minutes</button>
+                  <button onClick={() => exportChatToWord(chatHistory.filter(m => m.role === 'model').map(m => m.content).join('\n\n'))} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded font-bold border border-blue-500/20 transition-all">Report</button>
                 </div>
               )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-950/20 custom-scrollbar">
+              {chatHistory.length === 0 && (
+                <div className="h-full flex flex-col items-center justify-center text-center px-4 space-y-2">
+                  <p className="text-xs text-gray-600 italic">Generate an analysis of the meeting segments below.</p>
+                  <button 
+                    onClick={(e) => { setUserInput("Summarize Key Decisions and Action Items with Person names."); handleChat(e as any); }}
+                    className="text-[10px] font-bold text-blue-500 uppercase border border-blue-500/20 px-3 py-1.5 rounded hover:bg-blue-500/10 transition-all"
+                  >
+                    Auto-Analyze
+                  </button>
+                </div>
+              )}
               {chatHistory.map((msg, idx) => (
                 <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[90%] p-4 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 border border-gray-700 rounded-bl-none'}`}>
-                    {msg.content.split('\n').map((line, i) => <p key={i}>{line}</p>)}
+                  <div className={`max-w-[90%] p-3 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-md' : 'bg-gray-800 text-gray-200 border border-gray-700 rounded-bl-none shadow-sm'}`}>
+                    {msg.content.split('\n').map((line, i) => <p key={i} className="mb-1">{line}</p>)}
                   </div>
                 </div>
               ))}
-              {isChatting && <div className="text-xs text-blue-500 animate-pulse">Assistant is thinking...</div>}
+              {isChatting && <div className="text-[10px] text-blue-500 animate-pulse font-bold tracking-widest uppercase ml-1">Thinking...</div>}
               <div ref={chatEndRef} />
             </div>
             <form onSubmit={handleChat} className="p-3 bg-gray-900 border-t border-gray-800 flex gap-2">
-              <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="Ask about this session..." className="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500" disabled={isChatting || !isTranscribed} />
-              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 rounded-lg flex items-center justify-center transition-all disabled:opacity-20" disabled={isChatting || !isTranscribed || !userInput.trim()}>
+              <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="Query the AI..." className="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner" disabled={isChatting || !isTranscribed} />
+              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all disabled:opacity-20 shadow-lg active:scale-95" disabled={isChatting || !isTranscribed || !userInput.trim()}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
               </button>
             </form>
