@@ -6,41 +6,25 @@ const API_KEY = process.env.API_KEY || "";
 
 /**
  * Robust media processing with Gemini
- * Includes error handling for transient 500 errors
+ * Optimized to prevent JSON truncation on large files by removing redundant 'fullText' from schema.
  */
 export const processMedia = async (mediaBase64: string, mimeType: string, retries = 2): Promise<{ transcript: TranscriptSegment[]; fullText: string; subject: string }> => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   
   const isAudio = mimeType.startsWith('audio/');
   const prompt = `
-    You are an expert transcriber and analyst. Transcribe the provided media content (${isAudio ? 'Audio Session / Phone Call' : 'Video Recording'}) and summarize the main subject.
-    The content may contain speech in English, Hindi, or Marathi, or a mix.
+    You are an expert professional transcribing and analyzing a ${isAudio ? 'Phone Call or Audio Recording' : 'Video Recording'}.
+    The content may contain speech in English, Hindi, or Marathi, or a mix (Hinglish/Marathlish).
     
-    Context: If this is an audio-only file, it is likely a phone call or a voice meeting. 
-    Pay close attention to caller and receiver roles. Filter out background noise or static common in phone lines.
+    TASK:
+    1. Provide a concise 'subject' (max 10 words).
+    2. Transcribe the conversation into chronological 'segments'.
+    3. Identify the speaker (e.g., "Caller", "Receiver", "Client", "Agent") and the primary language of the segment.
+    4. MANDATORY: For any non-English speech, provide an accurate English translation in 'translatedText'.
     
-    Rules:
-    1. Identify the language for each segment.
-    2. Provide timestamps in format [MM:SS].
-    3. If multiple speakers are present, label them distinctly (e.g., Caller, Recipient, or Speaker 1, Speaker 2).
-    4. Provide a concise "subject" line (max 10 words) describing the main topic.
-    5. Transcribe ALL spoken words accurately into text.
-    6. MANDATORY: For any segments in Hindi or Marathi, provide an accurate English translation in the "translatedText" field.
-    
-    Strictly use JSON output format with the following schema:
-    {
-      "subject": "Concise summary of the meeting or call",
-      "segments": [
-        { 
-          "timestamp": "00:05", 
-          "speaker": "Caller", 
-          "text": "The original spoken text...", 
-          "translatedText": "English translation if text was Hindi/Marathi, else leave blank",
-          "language": "English/Hindi/Marathi" 
-        }
-      ],
-      "fullText": "Full concatenated text without timestamps"
-    }
+    OUTPUT FORMAT:
+    Strictly return valid JSON. Do NOT include a 'fullText' summary of the whole transcript in the JSON to save space; 
+    instead, focus only on high-quality segments.
   `;
 
   try {
@@ -59,43 +43,65 @@ export const processMedia = async (mediaBase64: string, mimeType: string, retrie
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            subject: { type: Type.STRING },
+            subject: { 
+              type: Type.STRING,
+              description: "A professional title for the recording."
+            },
             segments: {
               type: Type.ARRAY,
+              description: "Chronological list of spoken parts.",
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  timestamp: { type: Type.STRING },
+                  timestamp: { type: Type.STRING, description: "[MM:SS] format" },
                   speaker: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  translatedText: { type: Type.STRING },
+                  text: { type: Type.STRING, description: "Verbatim text in original language" },
+                  translatedText: { type: Type.STRING, description: "English translation for non-English segments" },
                   language: { type: Type.STRING }
                 },
                 required: ["timestamp", "text"]
               }
-            },
-            fullText: { type: Type.STRING }
+            }
           },
-          required: ["subject", "segments", "fullText"]
+          required: ["subject", "segments"]
         }
       }
     });
 
-    if (!response.text) throw new Error("Empty response from AI model");
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI model");
 
-    const data = JSON.parse(response.text);
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error("Initial JSON parse failed. Attempting to repair truncated JSON...", text.slice(-100));
+      // Basic repair for common truncation: try closing the arrays/objects if they look cut off
+      let repairedText = text.trim();
+      if (!repairedText.endsWith('}')) {
+        if (!repairedText.endsWith(']')) repairedText += ']}';
+        else repairedText += '}';
+      }
+      data = JSON.parse(repairedText);
+    }
+
+    const segments: TranscriptSegment[] = (data.segments || []).map((s: any, idx: number) => ({
+      ...s,
+      id: `seg-${idx}-${Date.now()}`
+    }));
+
+    // Calculate fullText locally to avoid passing massive strings back and forth in JSON
+    const fullText = segments.map(s => `[${s.timestamp}] ${s.speaker || 'Speaker'}: ${s.text}`).join('\n');
+
     return {
       subject: data.subject || "Untitled Recording",
-      transcript: (data.segments || []).map((s: any, idx: number) => ({
-        ...s,
-        id: `seg-${idx}-${Date.now()}`
-      })),
-      fullText: data.fullText || ""
+      transcript: segments,
+      fullText: fullText
     };
   } catch (err: any) {
-    if (retries > 0 && (err.message?.includes('500') || err.message?.includes('xhr'))) {
-      console.warn(`Transient error detected, retrying... (${retries} left)`);
-      await new Promise(r => setTimeout(r, 2000));
+    if (retries > 0 && (err.message?.includes('500') || err.message?.includes('xhr') || err.message?.includes('Unterminated'))) {
+      console.warn(`Transient or truncation error detected, retrying with backoff... (${retries} left)`);
+      await new Promise(r => setTimeout(r, 3000));
       return processMedia(mediaBase64, mimeType, retries - 1);
     }
     throw err;
